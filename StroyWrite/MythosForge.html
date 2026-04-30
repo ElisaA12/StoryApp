@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MythosForge</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #07070e; --surface: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.07);
+    --gold: #c9a055; --gold-light: #e8c87a; --blue: #6b9fd4; --purple: #9b7ec8;
+    --teal: #7ec8c8; --green: #7ec89b; --text: #f0e8d5;
+    --text-muted: rgba(240,232,213,0.4); --text-dim: rgba(240,232,213,0.22);
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow: hidden; }
+  #root { height: 100%; display: flex; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  button { font-family: 'DM Sans', sans-serif; }
+  input, textarea, select { font-family: 'DM Sans', sans-serif; }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+  @keyframes modalIn { from { opacity:0; transform:scale(0.94) translateY(-10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="store.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="components/sidebar.jsx"></script>
+<script type="text/babel" src="components/constellation.jsx"></script>
+<script type="text/babel" src="components/editor.jsx"></script>
+<script type="text/babel" src="components/character.jsx"></script>
+<script type="text/babel" src="components/timeline.jsx"></script>
+<script type="text/babel" src="components/panels.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── Global Modal ────────────────────────────────────────────────────────────
+let _setModalContent = null;
+window.openModal = (content) => { if (_setModalContent) _setModalContent(content); };
+window.closeModal = () => { if (_setModalContent) _setModalContent(null); };
+
+function GlobalModal() {
+  const [content, setContent] = useState(null);
+  useEffect(() => { _setModalContent = setContent; return () => { _setModalContent = null; }; }, []);
+  if (!content) return null;
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.75)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}
+      onClick={window.closeModal}>
+      <div style={{ background:'rgba(13,13,20,0.98)', backdropFilter:'blur(20px)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'16px', width:'100%', maxWidth:'600px', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 40px 80px rgba(0,0,0,0.6)', animation:'modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}
+        onClick={e => e.stopPropagation()}>
+        {content}
+      </div>
+    </div>
+  );
+}
+
+// ── Export / Import ─────────────────────────────────────────────────────────
+function _download(filename, mime, content) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+window.exportTXT = () => {
+  const d = Store.get();
+  const text = d.chapters.map(ch => `${ch.title}\n${'─'.repeat(ch.title.length)}\n\n${ch.content || '(empty)'}`).join('\n\n\n');
+  _download(`${d.projectName}.txt`, 'text/plain', text);
+};
+
+window.exportHTML = () => {
+  const d = Store.get();
+  const body = d.chapters.map(ch => {
+    const paras = (ch.content || '').split('\n\n').map(p => `<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+    return `<h1>${ch.title}</h1>${paras}`;
+  }).join('<hr>');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${d.projectName}</title><style>body{font-family:Georgia,serif;max-width:720px;margin:80px auto;line-height:1.8;color:#1a1a1a}h1{margin-top:2.5em;font-size:1.6em}p{margin-bottom:1em}hr{margin:3em 0;border:none;border-top:1px solid #ccc}</style></head><body>${body}</body></html>`;
+  _download(`${d.projectName}.html`, 'text/html', html);
+};
+
+window.exportJSON = () => {
+  const d = Store.get();
+  _download(`${d.projectName}.json`, 'application/json', JSON.stringify(d, null, 2));
+};
+
+window.exportDOCX = async () => {
+  const d = Store.get();
+  if (!window.docx) { alert('DOCX library not loaded. Check your internet connection.'); return; }
+  try {
+    const { Document, Paragraph, TextRun, HeadingLevel, Packer } = window.docx;
+    const children = [];
+    d.chapters.forEach(ch => {
+      children.push(new Paragraph({ text: ch.title, heading: HeadingLevel.HEADING_1 }));
+      (ch.content || '').split('\n\n').forEach(para => {
+        if (para.trim()) children.push(new Paragraph({ children: [new TextRun(para.trim())] }));
+      });
+      children.push(new Paragraph({}));
+    });
+    const doc = new Document({ sections: [{ properties: {}, children }] });
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${d.projectName}.docx`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(err) { alert('DOCX export failed: ' + err.message); }
+};
+
+window.importJSON = () => {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try { Store.update(() => JSON.parse(ev.target.result)); alert('Imported successfully.'); }
+      catch(err) { alert('Invalid JSON: ' + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+};
+
+// ── Tweaks ──────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "purple",
+  "sidebarCollapsed": false,
+  "bgTone": "carbon"
+}/*EDITMODE-END*/;
+
+const ACCENT_MAP = {
+  gold:   { primary: '#c9a055', secondary: '#e8c87a' },
+  blue:   { primary: '#6b9fd4', secondary: '#9bbfe8' },
+  purple: { primary: '#9b7ec8', secondary: '#b89ee0' },
+  teal:   { primary: '#7ec8c8', secondary: '#9ee0e0' },
+};
+const BG_MAP = { ink: '#07070e', carbon: '#0d0d12', warm: '#0e0b08', slate: '#08080f' };
+
+// ── TopBar ──────────────────────────────────────────────────────────────────
+function TopBar({ onCommandOpen, activeView }) {
+  const [exportOpen, setExportOpen] = useState(false);
+  const projectName = useStore(d => d.projectName);
+  const VIEW_NAMES = {
+    dashboard:'Constellation Hub', editor:'Manuscript', characters:'Characters',
+    timeline:'Timeline', lore:'Encyclopedia', relationships:'Relationship Graph',
+    maps:'Maps', inspiration:'Inspiration Board',
+  };
+  const name = VIEW_NAMES[activeView] || activeView;
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    const close = () => setExportOpen(false);
+    window.addEventListener('click', close, { once: true });
+    return () => window.removeEventListener('click', close);
+  }, [exportOpen]);
+
+  const doExport = (type) => {
+    setExportOpen(false);
+    if (type === 'DOCX') window.exportDOCX();
+    else window[`export${type}`]?.();
+  };
+
+  return (
+    <div style={{ height:'48px', flexShrink:0, display:'flex', alignItems:'center', gap:'12px', padding:'0 20px', borderBottom:'1px solid rgba(255,255,255,0.06)', background:'rgba(7,7,14,0.7)', backdropFilter:'blur(12px)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+        <span style={{ fontSize:'11px', color:'rgba(240,232,213,0.25)' }}>{projectName}</span>
+        <span style={{ fontSize:'11px', color:'rgba(240,232,213,0.15)' }}>›</span>
+        <span style={{ fontSize:'12px', color:'rgba(240,232,213,0.6)' }}>{name}</span>
+      </div>
+      <div style={{ flex:1 }} />
+
+      <div style={{ position:'relative' }} onClick={e => e.stopPropagation()}>
+        <button onClick={() => setExportOpen(o => !o)}
+          style={{ padding:'5px 10px', borderRadius:'7px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'rgba(240,232,213,0.5)', fontSize:'11px', cursor:'pointer' }}>
+          ↓ Export
+        </button>
+        {exportOpen && (
+          <div style={{ position:'absolute', right:0, top:'34px', background:'rgba(13,13,20,0.98)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'10px', overflow:'hidden', minWidth:'170px', zIndex:500, boxShadow:'0 16px 40px rgba(0,0,0,0.5)' }}>
+            {['TXT','HTML','JSON','DOCX'].map(t => (
+              <button key={t} onClick={() => doExport(t)} style={{ display:'block', width:'100%', padding:'9px 14px', background:'transparent', border:'none', color:'rgba(240,232,213,0.7)', fontSize:'12px', cursor:'pointer', textAlign:'left' }}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.07)'}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                Export as .{t.toLowerCase()}
+              </button>
+            ))}
+            <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)' }}>
+              <button onClick={() => { setExportOpen(false); window.importJSON(); }} style={{ display:'block', width:'100%', padding:'9px 14px', background:'transparent', border:'none', color:'rgba(240,232,213,0.4)', fontSize:'12px', cursor:'pointer', textAlign:'left' }}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.07)'}
+                onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                Import JSON…
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button onClick={onCommandOpen} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'6px 12px', borderRadius:'8px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'rgba(240,232,213,0.35)', fontSize:'12px', cursor:'pointer', width:'200px' }}
+        onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.07)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.14)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.08)'; }}>
+        <span style={{ fontSize:'12px', color:'var(--gold)' }}>⌘</span>
+        <span style={{ flex:1 }}>Quick search…</span>
+        <span style={{ fontSize:'10px', border:'1px solid rgba(255,255,255,0.1)', padding:'1px 4px', borderRadius:'3px' }}>K</span>
+      </button>
+
+      <div style={{ display:'flex', gap:'4px' }}>
+        {['🔔','⚙','?'].map(ic => (
+          <button key={ic} style={{ width:'32px', height:'32px', borderRadius:'8px', border:'none', background:'transparent', color:'rgba(240,232,213,0.3)', fontSize:ic==='🔔'?'14px':'13px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+            onMouseLeave={e => e.currentTarget.style.background='transparent'}>{ic}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── MainContent routing ─────────────────────────────────────────────────────
+function MainContent({ activeView, setActiveView }) {
+  if (activeView === 'dashboard')                                 return <ConstellationHub setActiveView={setActiveView} />;
+  if (activeView === 'editor' || activeView.startsWith('chapter')) return <EditorView activeView={activeView} />;
+  if (activeView === 'characters' || activeView.startsWith('char-')) return <CharacterSheet activeView={activeView} setActiveView={setActiveView} />;
+  if (activeView === 'timeline')                                  return <TimelineView />;
+  if (activeView === 'relationships')                             return <RelationshipGraph />;
+  if (activeView === 'lore')                                      return <EncyclopediaView />;
+  if (activeView === 'maps' || activeView.startsWith('place-'))   return <MapsView />;
+  if (activeView === 'inspiration')                               return <InspirationPanel />;
+  return <ConstellationHub setActiveView={setActiveView} />;
+}
+
+// ── App ─────────────────────────────────────────────────────────────────────
+function App() {
+  const { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } = window;
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [activeView, setActiveView] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(tweaks.sidebarCollapsed);
+  const [cmdOpen, setCmdOpen] = useState(false);
+
+  const accent = ACCENT_MAP[tweaks.accentColor] || ACCENT_MAP.purple;
+  const bg = BG_MAP[tweaks.bgTone] || BG_MAP.carbon;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--gold', accent.primary);
+    document.documentElement.style.setProperty('--gold-light', accent.secondary);
+    document.body.style.background = bg;
+  }, [accent, bg]);
+
+  useEffect(() => {
+    const h = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(o => !o); } };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
+  return (
+    <div style={{ display:'flex', width:'100vw', height:'100vh', overflow:'hidden', background:bg }}>
+      <Sidebar activeView={activeView} setActiveView={setActiveView} collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
+        <TopBar onCommandOpen={() => setCmdOpen(true)} activeView={activeView} />
+        <div style={{ flex:1, overflow:'hidden', display:'flex' }}>
+          <MainContent activeView={activeView} setActiveView={setActiveView} />
+        </div>
+      </div>
+      <CommandMenu open={cmdOpen} onClose={() => setCmdOpen(false)} setActiveView={setActiveView} />
+      <GlobalModal />
+      <TweaksPanel>
+        <TweakSection label="Accent Color">
+          <TweakRadio id="accentColor" value={tweaks.accentColor} options={['gold','blue','purple','teal']} onChange={v => setTweak('accentColor', v)} />
+        </TweakSection>
+        <TweakSection label="Background">
+          <TweakRadio id="bgTone" value={tweaks.bgTone} options={['ink','carbon','warm','slate']} onChange={v => setTweak('bgTone', v)} />
+        </TweakSection>
+        <TweakSection label="Sidebar">
+          <TweakToggle label="Collapsed by default" value={sidebarCollapsed} onChange={v => { setSidebarCollapsed(v); setTweak('sidebarCollapsed', v); }} />
+        </TweakSection>
+        <TweakSection label="Data">
+          <button onClick={() => { if (confirm('Reset all data to defaults?')) Store.reset(); }}
+            style={{ width:'100%', padding:'7px', borderRadius:'7px', background:'rgba(200,80,80,0.12)', border:'1px solid rgba(200,80,80,0.25)', color:'rgba(240,120,100,0.8)', fontSize:'11px', cursor:'pointer' }}>
+            Reset to defaults
+          </button>
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
