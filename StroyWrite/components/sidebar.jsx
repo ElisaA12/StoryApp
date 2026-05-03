@@ -13,26 +13,32 @@ function Sidebar({ activeView, setActiveView, collapsed, setCollapsed }) {
   const [activeProject, setActiveProject] = useState('p1');
   const [showProjects, setShowProjects] = useState(false);
 
+  const t = useT();
   const characters = useStore(d => d.characters);
   const chapters   = useStore(d => d.chapters);
   const mapPins    = useStore(d => d.mapPins);
+  const language   = useStore(d => d.language || 'en');
 
   const NAV_ITEMS = [
-    { id: 'dashboard',     icon: '✦', label: 'Constellation Hub', sub: [] },
-    { id: 'editor',        icon: '✍', label: 'Manuscript',        sub: chapters.map(ch => ({ id: ch.id, label: ch.title })) },
-    { id: 'characters',    icon: '◈', label: 'Characters',        sub: characters.map(c => ({ id: `char-${c.id}`, label: c.name })) },
-    { id: 'places',        icon: '◉', label: 'Places',            sub: mapPins.map(p => ({ id: `place-${p.id}`, label: p.label })) },
-    { id: 'timeline',      icon: '◫', label: 'Timeline',          sub: [] },
-    { id: 'lore',          icon: '◬', label: 'Encyclopedia',      sub: [] },
-    { id: 'relationships', icon: '⬡', label: 'Relationships',     sub: [] },
-    { id: 'maps',          icon: '◭', label: 'Maps',              sub: [] },
-    { id: 'inspiration',   icon: '✧', label: 'Inspiration Board', sub: [] },
+    { id: 'dashboard',     icon: '✦', label: t('nav.dashboard'),     sub: [] },
+    { id: 'editor',        icon: '✍', label: t('nav.editor'),        sub: chapters.map(ch => ({ id: ch.id, label: ch.title })) },
+    { id: 'characters',    icon: '◈', label: t('nav.characters'),    sub: characters.map(c => ({ id: `char-${c.id}`, label: c.name })) },
+    { id: 'places',        icon: '◉', label: t('nav.places'),        sub: mapPins.map(p => ({ id: `place-${p.id}`, label: p.label })) },
+    { id: 'timeline',      icon: '◫', label: t('nav.timeline'),      sub: [] },
+    { id: 'lore',          icon: '◬', label: t('nav.encyclopedia'),  sub: [] },
+    { id: 'relationships', icon: '⬡', label: t('nav.relationships'), sub: [] },
+    { id: 'maps',          icon: '◭', label: t('nav.maps'),          sub: [] },
+    { id: 'inspiration',   icon: '✧', label: t('nav.inspiration'),   sub: [] },
   ];
 
   const toggleExpand = id => setExpandedItems(p => ({ ...p, [id]: !p[id] }));
   const currentProject = PROJECTS.find(p => p.id === activeProject);
   const totalWords = getTotalWordCount(chapters);
 
+  const toggleLanguage = () => {
+    Store.update(d => ({ ...d, language: d.language === 'en' ? 'it' : 'en' }));
+  };
+  
   const isParentActive = (item) => {
     if (activeView === item.id) return true;
     if (item.id === 'characters' && activeView.startsWith('char-')) return true;
@@ -77,7 +83,7 @@ function Sidebar({ activeView, setActiveView, collapsed, setCollapsed }) {
                 <span>{p.icon}</span><span>{p.name}</span>
               </div>
             ))}
-            <div style={{ padding:'8px 12px', fontSize:'11px', color:'rgba(240,232,213,0.35)', borderTop:'1px solid rgba(255,255,255,0.06)', cursor:'pointer' }}>+ New Project</div>
+            <div style={{ padding:'8px 12px', fontSize:'11px', color:'rgba(240,232,213,0.35)', borderTop:'1px solid rgba(255,255,255,0.06)', cursor:'pointer' }}>{t('sidebar.newProject')}</div>
           </div>
         )}
       </div>
@@ -120,15 +126,32 @@ function Sidebar({ activeView, setActiveView, collapsed, setCollapsed }) {
       <div style={{ padding:collapsed?'14px 12px':'14px 16px', borderTop:'1px solid rgba(255,255,255,0.06)', display:'flex', flexDirection:'column', gap:'6px', flexShrink:0 }}>
         {!collapsed && totalWords > 0 && (
           <div style={{ padding:'7px 10px', borderRadius:'7px', background:'rgba(201,160,85,0.06)', border:'1px solid rgba(201,160,85,0.14)', fontSize:'10px', color:'rgba(201,160,85,0.7)', display:'flex', justifyContent:'space-between' }}>
-            <span>Total words</span><strong style={{ color:'var(--gold)' }}>{totalWords.toLocaleString()}</strong>
+            <span>{t('sidebar.totalWords')}</span><strong style={{ color:'var(--gold)' }}>{totalWords.toLocaleString()}</strong>
           </div>
         )}
         <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'8px' }}>
           <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'linear-gradient(135deg, #9b7ec8, #6b9fd4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', color:'white', flexShrink:0 }}>A</div>
-          {!collapsed && (<div>
-            <div style={{ fontSize:'11.5px', color:'#f0e8d5' }}>Author</div>
-            <div style={{ fontSize:'10px', color:'rgba(240,232,213,0.35)' }}>Pro Plan</div>
-          </div>)}
+          {!collapsed && (<>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:'11.5px', color:'#f0e8d5' }}>{t('sidebar.author')}</div>
+              <div style={{ fontSize:'10px', color:'rgba(240,232,213,0.35)' }}>{t('sidebar.proPlan')}</div>
+            </div>
+            {/* Language toggle */}
+            <button onClick={toggleLanguage}
+              title={language === 'en' ? 'Passa all\'italiano' : 'Switch to English'}
+              style={{ padding:'3px 7px', borderRadius:'5px', border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.06)', color:'rgba(240,232,213,0.7)', fontSize:'10px', cursor:'pointer', fontWeight:600, letterSpacing:'0.05em', flexShrink:0 }}
+              onMouseEnter={e => { e.currentTarget.style.background='rgba(201,160,85,0.15)'; e.currentTarget.style.borderColor='rgba(201,160,85,0.4)'; e.currentTarget.style.color='var(--gold)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.15)'; e.currentTarget.style.color='rgba(240,232,213,0.7)'; }}>
+              {t('lang.switch')}
+            </button>
+          </>)}
+          {collapsed && (
+            <button onClick={toggleLanguage}
+              title={language === 'en' ? 'Italiano' : 'English'}
+              style={{ width:'28px', height:'28px', borderRadius:'6px', border:'1px solid rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.04)', color:'rgba(240,232,213,0.5)', fontSize:'9px', cursor:'pointer', fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {t('lang.switch')}
+            </button>
+          )}
         </div>
       </div>
     </aside>
