@@ -361,11 +361,12 @@ function getTotalWordCount(chapters) {
 }
 
 function formatTimeAgo(ts) {
+  const t = window.getT ? window.getT() : (k => k);
   const d = Date.now() - ts;
-  if (d < 60000)   return 'Just now';
-  if (d < 3600000) return `${Math.floor(d / 60000)} min ago`;
-  if (d < 86400000)return `${Math.floor(d / 3600000)} hr ago`;
-  return `${Math.floor(d / 86400000)}d ago`;
+  if (d < 60000)    return t('time.justNow');
+  if (d < 3600000)  return `${Math.floor(d / 60000)} ${t('time.minAgo')}`;
+  if (d < 86400000) return `${Math.floor(d / 3600000)} ${t('time.hrAgo')}`;
+  return `${Math.floor(d / 86400000)}${t('time.dAgo')}`;
 }
 
 function buildHighlightedHtml(text, loreTerms) {
