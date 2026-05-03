@@ -22,6 +22,7 @@ That would have to be enough.`;
 
 const _DEFAULT = {
   version: 1,
+  language: 'en',
   projectName: 'The Ashen Crown',
   activeCharacterId: 'lyra',
   activeChapterId: 'chapter2',
